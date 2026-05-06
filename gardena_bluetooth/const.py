@@ -1,26 +1,35 @@
 from abc import ABC
 from enum import IntEnum
 from typing import ClassVar
+
 from .parse import (
+    ActivationReason,
     CharacteristicBool,
-    CharacteristicWeekday,
     CharacteristicBytes,
     CharacteristicErrorData,
+    CharacteristicEventHistory,
     CharacteristicInt,
-    CharacteristicIntEnum,
     CharacteristicIntArray,
+    CharacteristicIntEnum,
+    CharacteristicIntKeys,
     CharacteristicLong,
     CharacteristicLongArray,
-    CharacteristicString,
-    CharacteristicTime,
     CharacteristicNullString,
     CharacteristicNullStringUf8,
+    CharacteristicPnpId,
+    CharacteristicSchedule,
+    CharacteristicSMP,
+    CharacteristicString,
+    CharacteristicTime,
     CharacteristicTimeArray,
+    CharacteristicTimeDelta,
+    CharacteristicTimeOfDay,
     CharacteristicUInt16,
     CharacteristicUInt16PairArray,
-    CharacteristicIntKeys,
-    Service,
+    CharacteristicWeekdays,
     ProductType,
+    Service,
+    SkipReason,
 )
 
 PRODUCT_NAMES = {
@@ -55,7 +64,9 @@ class Valve(Service):
     connected_state = CharacteristicBool("98bd0f12-0b0e-421a-84e5-ddbf75dc6de4")
     remaining_open_time = CharacteristicLong("98bd0f13-0b0e-421a-84e5-ddbf75dc6de4")
     manual_watering_time = CharacteristicLong("98bd0f14-0b0e-421a-84e5-ddbf75dc6de4")
-    activation_reason = CharacteristicInt("98bd0f15-0b0e-421a-84e5-ddbf75dc6de4")
+    activation_reason = CharacteristicIntEnum(
+        "98bd0f15-0b0e-421a-84e5-ddbf75dc6de4", enum=ActivationReason
+    )
 
 
 class ValveX(Service, ABC):
@@ -64,7 +75,7 @@ class ValveX(Service, ABC):
     error = ClassVar[CharacteristicInt]
     state: ClassVar[CharacteristicBool]
     remaining_time_open: ClassVar[CharacteristicLong]
-    activation_reason: ClassVar[CharacteristicInt]
+    activation_reason: ClassVar[CharacteristicIntEnum]
     start_watering = ClassVar[CharacteristicString]
     stop_watering = ClassVar[CharacteristicString]
 
@@ -79,7 +90,9 @@ class Valve1(ValveX):
     error = CharacteristicInt("98bda003-0b0e-421a-84e5-ddbf75dc6de4")
     state = CharacteristicBool("98bda008-0b0e-421a-84e5-ddbf75dc6de4")
     remaining_time_open = CharacteristicLong("98bda010-0b0e-421a-84e5-ddbf75dc6de4")
-    activation_reason = CharacteristicInt("98bda011-0b0e-421a-84e5-ddbf75dc6de4")
+    activation_reason = CharacteristicIntEnum(
+        "98bda011-0b0e-421a-84e5-ddbf75dc6de4", enum=ActivationReason
+    )
     start_watering = CharacteristicIntKeys("98bda020-0b0e-421a-84e5-ddbf75dc6de4")
     stop_watering = CharacteristicIntKeys("98bda021-0b0e-421a-84e5-ddbf75dc6de4")
 
@@ -94,7 +107,9 @@ class Valve2(ValveX):
     error = CharacteristicInt("98bda103-0b0e-421a-84e5-ddbf75dc6de4")
     state = CharacteristicBool("98bda108-0b0e-421a-84e5-ddbf75dc6de4")
     remaining_time_open = CharacteristicLong("98bda110-0b0e-421a-84e5-ddbf75dc6de4")
-    activation_reason = CharacteristicInt("98bda111-0b0e-421a-84e5-ddbf75dc6de4")
+    activation_reason = CharacteristicIntEnum(
+        "98bda111-0b0e-421a-84e5-ddbf75dc6de4", enum=ActivationReason
+    )
     start_watering = CharacteristicIntKeys("98bda120-0b0e-421a-84e5-ddbf75dc6de4")
     stop_watering = CharacteristicIntKeys("98bda121-0b0e-421a-84e5-ddbf75dc6de4")
 
@@ -153,64 +168,70 @@ class AquaContourSchedule(Service):
     products = {ProductType.AQUA_CONTOURS}
     variant = "1"
 
-    schedule_1 = CharacteristicBytes(
+    schedule_1 = CharacteristicSchedule(
         "98bd0c11-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_2 = CharacteristicBytes(
+    schedule_2 = CharacteristicSchedule(
         "98bd0c12-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_3 = CharacteristicBytes(
+    schedule_3 = CharacteristicSchedule(
         "98bd0c13-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_4 = CharacteristicBytes(
+    schedule_4 = CharacteristicSchedule(
         "98bd0c14-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_5 = CharacteristicBytes(
+    schedule_5 = CharacteristicSchedule(
         "98bd0c15-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_6 = CharacteristicBytes(
+    schedule_6 = CharacteristicSchedule(
         "98bd0c16-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_7 = CharacteristicBytes(
+    schedule_7 = CharacteristicSchedule(
         "98bd0c17-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_8 = CharacteristicBytes(
+    schedule_8 = CharacteristicSchedule(
         "98bd0c18-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_9 = CharacteristicBytes(
+    schedule_9 = CharacteristicSchedule(
         "98bd0c19-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_10 = CharacteristicBytes(
+    schedule_10 = CharacteristicSchedule(
         "98bd0c1a-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_11 = CharacteristicBytes(
+    schedule_11 = CharacteristicSchedule(
         "98bd0c1b-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_12 = CharacteristicBytes(
+    schedule_12 = CharacteristicSchedule(
         "98bd0c1c-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_13 = CharacteristicBytes(
+    schedule_13 = CharacteristicSchedule(
         "98bd0c1d-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_14 = CharacteristicBytes(
+    schedule_14 = CharacteristicSchedule(
         "98bd0c1e-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    schedule_15 = CharacteristicBytes(
+    schedule_15 = CharacteristicSchedule(
         "98bd0c1f-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
 
 
 class Schedule(Service, ABC):
     products = set(ProductType) - {ProductType.AQUA_CONTOURS}
+    start_time: ClassVar[CharacteristicTimeOfDay]
+    duration: ClassVar[CharacteristicTimeDelta]
+    weekdays: ClassVar[CharacteristicWeekdays]
+    valve_link: ClassVar[CharacteristicBytes]
+    active: ClassVar[CharacteristicBool]
+    sensor_link: ClassVar[CharacteristicBool]
 
     def __init_subclass__(cls, *, instance: int, **kwargs):
         def _uuid(offset: int) -> str:
             return f"98bd0c{0x10 * instance + offset:02x}-0b0e-421a-84e5-ddbf75dc6de4"
 
         cls.uuid = _uuid(0)
-        cls.start_time = CharacteristicLong(_uuid(1), name="Start Time")
-        cls.duration = CharacteristicLong(_uuid(2), name="Duration")
-        cls.weekdays = CharacteristicWeekday(_uuid(3), name="Weekdays")
+        cls.start_time = CharacteristicTimeOfDay(_uuid(1), name="Start Time")
+        cls.duration = CharacteristicTimeDelta(_uuid(2), name="Duration")
+        cls.weekdays = CharacteristicWeekdays(_uuid(3), name="Weekdays")
         cls.valve_link = CharacteristicBytes(_uuid(4), name="Valve Link")
         cls.active = CharacteristicBool(_uuid(5), name="Active")
         cls.sensor_link = CharacteristicBool(_uuid(6), name="Sensor Link")
@@ -240,8 +261,10 @@ class Schedule_5(Schedule, instance=5):
 class DeviceInformation(Service):
     uuid = "0000180a-0000-1000-8000-00805f9b34fb"
     model_number = CharacteristicString("00002a24-0000-1000-8000-00805f9b34fb")
+    serial_number = CharacteristicString("00002a25-0000-1000-8000-00805f9b34fb")
     firmware_version = CharacteristicString("00002a26-0000-1000-8000-00805f9b34fb")
     manufacturer_name = CharacteristicString("00002a29-0000-1000-8000-00805f9b34fb")
+    pnp_id = CharacteristicPnpId("00002a50-0000-1000-8000-00805f9b34fb")
 
 
 class Battery(Service):
@@ -268,7 +291,9 @@ class WateringHistory(Service):
 
     timestamp_array = CharacteristicTimeArray("98bd0d11-0b0e-421a-84e5-ddbf75dc6de4")
     timestamp_count = CharacteristicInt("98bd0d12-0b0e-421a-84e5-ddbf75dc6de4")
-    skip_reason = CharacteristicBytes("98bd0d13-0b0e-421a-84e5-ddbf75dc6de4")
+    skip_reason = CharacteristicIntEnum(
+        "98bd0d13-0b0e-421a-84e5-ddbf75dc6de4", enum=SkipReason
+    )
     watering_duration = CharacteristicLongArray("98bd0d14-0b0e-421a-84e5-ddbf75dc6de4")
     watering_skipped = CharacteristicBool("98bd0d15-0b0e-421a-84e5-ddbf75dc6de4")
     skipped_schedule_number = CharacteristicInt("98bd0d16-0b0e-421a-84e5-ddbf75dc6de4")
@@ -337,7 +362,7 @@ class AquaContourErrorCode(IntEnum):
 
 class EventHistory(Service):
     uuid = "98bd0120-0b0e-421a-84e5-ddbf75dc6de4"
-    history = CharacteristicBytes("98bd0121-0b0e-421a-84e5-ddbf75dc6de4")
+    history = CharacteristicEventHistory("98bd0121-0b0e-421a-84e5-ddbf75dc6de4")
     error = CharacteristicErrorData(
         "98bd0122-0b0e-421a-84e5-ddbf75dc6de4", enum=AquaContourErrorCode
     )
@@ -392,8 +417,8 @@ class AquaContourWatering(Service):
     manual_watering_time = CharacteristicLong(
         "98bd0d13-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    activation_reason = CharacteristicInt(
-        "98bd0d14-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
+    activation_reason = CharacteristicIntEnum(
+        "98bd0d14-0b0e-421a-84e5-ddbf75dc6de4", variant="1", enum=ActivationReason
     )
     watering_skipped = CharacteristicBool(
         "98bd0d15-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
@@ -401,11 +426,11 @@ class AquaContourWatering(Service):
     skipped_schedule_number = CharacteristicInt(
         "98bd0d15-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
     )
-    watering_control_error = CharacteristicInt(
-        "98bd0d16-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
+    watering_control_error = CharacteristicIntEnum(
+        "98bd0d16-0b0e-421a-84e5-ddbf75dc6de4", variant="1", enum=AquaContourErrorCode
     )
-    skipped_reason = CharacteristicInt(
-        "98bd0d17-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
+    skipped_reason = CharacteristicIntEnum(
+        "98bd0d17-0b0e-421a-84e5-ddbf75dc6de4", variant="1", enum=SkipReason
     )
     watering_pause = CharacteristicInt(
         "98bd0d18-0b0e-421a-84e5-ddbf75dc6de4", variant="1"
@@ -465,3 +490,9 @@ class Fota(Service):
     image_identify = CharacteristicBytes("f000ffc1-0451-4000-b000-000000000000")
     image_block_id = CharacteristicBytes("f000ffc2-0451-4000-b000-000000000000")
     control_point = CharacteristicBytes("f000ffc5-0451-4000-b000-000000000000")
+
+
+class SMP(Service):
+    uuid = "8d53dc1d-1db7-4cd3-868b-8a527460aa84"
+
+    smp = CharacteristicSMP("DA2E7828-FBCE-4E01-AE9E-261174997C48")

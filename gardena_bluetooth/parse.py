@@ -1,8 +1,11 @@
 from abc import ABC
+from calendar import Day
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import IntEnum, Enum, auto
+from datetime import datetime, time, timedelta, timezone
+from enum import Enum, IntEnum, auto
 from typing import ClassVar, Generic, Self, TypeVar
+
+CharacteristicType = TypeVar("CharacteristicType")
 
 
 def pretty_name(name: str):
@@ -56,7 +59,139 @@ class ProductType(Enum):
         return ProductType.UNKNOWN
 
 
-CharacteristicType = TypeVar("CharacteristicType")
+class EnumOrInt(IntEnum):
+    @classmethod
+    def enum_or_int(cls, value: int) -> Self | int:
+        try:
+            return cls(value)
+        except ValueError:
+            return value
+
+    @classmethod
+    def decode(cls, data: bytes) -> Self | int:
+        raw = int.from_bytes(data, "little", signed=True)
+        return cls.enum_or_int(raw)
+
+    @classmethod
+    def encode(cls, value: Self | int) -> bytes:
+        return value.to_bytes(1, "little", signed=True)
+
+
+class SkipReason(EnumOrInt):
+    NONE = 0
+    RAIN_PAUSE = 1
+    HUMIDITY_SENSOR = 2
+    RAIN_SENSOR = 3
+    WATERING_ALREADY_ACTIVE = 4
+    BATTERY_EMPTY = 5
+    OTHER_SCHEDULE_WITH_SAME_START_TIME = 6
+    CONTOUR_NOT_ACTIVE = 7
+    CONTOUR_NOT_ENABLED_FOR_POSITION = 8
+    CONTOUR_DATA_INVALID = 9
+    POSITION_CHANGED = 10
+    CHARGING_CABLE_PLUGGED = 11
+    MANUAL_MODE = 12
+    NO_WATER = 14
+    VALVE_MOTOR_ERROR = 15
+    SPRINKLER_MOTOR_ERROR = 16
+    ROTATION_SENSOR_ERROR = 17
+    OPERATIONAL_MODE_CHANGED = 18
+    IRRIGATION_CONTROL_CHANGED = 19
+
+
+class SMPGroup(EnumOrInt):
+    OS = 0
+    IMAGE = 1
+    STATISTICS = 2
+    SETTINGS = 3
+    LOG = 4
+    RUN_TEST = 5
+    SPLIT_IMAGE = 6
+    CRASH = 7
+    FILE = 8
+    SHELL = 9
+    ZEPHYR = 63
+    APPLICATION_BASE = 64
+
+
+class SMPOperation(EnumOrInt):
+    READ = 0
+    READ_RSP = 1
+    WRITE = 2
+    WRITE_RSP = 3
+    ERASE = 4
+    ERASE_RSP = 5
+    SHA256 = 6
+    SHA256_RSP = 7
+    UPLOAD = 8
+    UPLOAD_RSP = 9
+    FILE = 10
+    FILE_RSP = 11
+
+
+class ActivationReason(EnumOrInt):
+    NONE = 0
+    MANUAL = 1
+    SCHEDULE = 2
+    EXTERNAL = 3
+    SETUP = 4
+
+
+@dataclass
+class CharacteristicSMPData:
+    res: int
+    ver: int
+    op: SMPOperation | int
+    flags: int
+    group: SMPGroup | int
+    sequence_num: int
+    command_id: int
+    payload: bytes = b""
+
+    @property
+    def data_length(self) -> int:
+        return len(self.payload)
+
+    @classmethod
+    def decode(cls, data: bytes) -> "CharacteristicSMPData":
+        if len(data) < 7:
+            raise ValueError(f"Invalid SMP frame length {len(data)}")
+
+        header = data[0]
+        res = (header >> 6) & 0x03
+        ver = (header >> 4) & 0x03
+        op = SMPOperation.enum_or_int(header & 0x0F)
+        flags = data[1]
+        data_length = int.from_bytes(data[2:4], "big")
+        group = SMPGroup.enum_or_int(data[4])
+        sequence_num = data[5]
+        command_id = data[6]
+        payload = data[7 : 7 + data_length]
+
+        return cls(
+            res=res,
+            ver=ver,
+            op=op,
+            flags=flags,
+            group=group,
+            sequence_num=sequence_num,
+            command_id=command_id,
+            payload=payload,
+        )
+
+    @classmethod
+    def encode(cls, value: "CharacteristicSMPData") -> bytes:
+        header = (
+            ((value.res & 0x03) << 6)
+            | ((value.ver & 0x03) << 4)
+            | (int(value.op) & 0x0F)
+        )
+        return (
+            bytes([header, value.flags])
+            + value.data_length.to_bytes(2, "big")
+            + bytes([int(value.group), value.sequence_num, value.command_id])
+            + value.payload
+        )
 
 
 @dataclass
@@ -88,6 +223,38 @@ class Characteristic(Generic[CharacteristicType]):
 
 
 @dataclass
+class CharacteristicPnpIdData:
+    source_id: int
+    vendor_id: int
+    product_id: int
+    product_version: int
+
+
+@dataclass
+class CharacteristicPnpId(Characteristic[CharacteristicPnpIdData]):
+    @classmethod
+    def decode(cls, data: bytes) -> CharacteristicPnpIdData:
+        if len(data) != 7:
+            raise ValueError(f"Invalid length of pnp data {data}")
+
+        return CharacteristicPnpIdData(
+            int.from_bytes(data[0:1], "little"),
+            int.from_bytes(data[1:3], "little"),
+            int.from_bytes(data[3:5], "little"),
+            int.from_bytes(data[5:7], "little"),
+        )
+
+    @classmethod
+    def encode(cls, value: CharacteristicPnpIdData) -> bytes:
+        return (
+            value.source_id.to_bytes(1, "little", signed=False)
+            + value.vendor_id.to_bytes(2, "little", signed=False)
+            + value.product_id.to_bytes(2, "little", signed=False)
+            + value.product_version.to_bytes(2, "little", signed=False)
+        )
+
+
+@dataclass
 class CharacteristicBytes(Characteristic[bytes]):
     @classmethod
     def decode(cls, data: bytes) -> bytes:
@@ -96,6 +263,17 @@ class CharacteristicBytes(Characteristic[bytes]):
     @classmethod
     def encode(cls, value: bytes) -> bytes:
         return value
+
+
+@dataclass
+class CharacteristicSMP(Characteristic[CharacteristicSMPData]):
+    @classmethod
+    def decode(cls, data: bytes) -> CharacteristicSMPData:
+        return CharacteristicSMPData.decode(data)
+
+    @classmethod
+    def encode(cls, value: CharacteristicSMPData) -> bytes:
+        return CharacteristicSMPData.encode(value)
 
 
 @dataclass
@@ -257,18 +435,43 @@ class CharacteristicUInt16PairArray(Characteristic[list[tuple[int, int]]]):
 
 
 @dataclass
-class CharacteristicWeekday(Characteristic[list[bool]]):
+class CharacteristicWeekdays(Characteristic[set[Day]]):
     @classmethod
-    def decode(cls, data: bytes) -> list[bool]:
+    def decode(cls, data: bytes) -> set[Day]:
         value = int.from_bytes(data, "little", signed=False)
-        return [(value >> i) & 1 != 0 for i in range(7)]
+        return {Day(i) for i in range(8) if (value >> i) & 1}
 
     @classmethod
-    def encode(cls, value: list[bool]) -> bytes:
+    def encode(cls, value: set[Day]) -> bytes:
         int_value = 0
-        for i, day in enumerate(value):
-            if day:
-                int_value |= 1 << i
+        for day in value:
+            int_value |= 1 << day.value
+        return int_value.to_bytes(1, "little", signed=False)
+
+
+class Contour(IntEnum):
+    CONTOUR_1 = 0
+    CONTOUR_2 = 1
+    CONTOUR_3 = 2
+    CONTOUR_4 = 3
+    CONTOUR_5 = 4
+    CONTOUR_6 = 5
+    CONTOUR_7 = 6
+    CONTOUR_8 = 7
+
+
+@dataclass
+class CharacteristicContours(Characteristic[set[Contour]]):
+    @classmethod
+    def decode(cls, data: bytes) -> set[Contour]:
+        value = int.from_bytes(data, "little", signed=False)
+        return {Contour(i) for i in range(8) if (value >> i) & 1}
+
+    @classmethod
+    def encode(cls, value: set[Contour]) -> bytes:
+        int_value = 0
+        for x in value:
+            int_value |= 1 << x.value
         return int_value.to_bytes(1, "little", signed=False)
 
 
@@ -277,13 +480,46 @@ class CharacteristicTime(Characteristic[datetime]):
     @classmethod
     def decode(cls, data: bytes) -> datetime:
         value = int.from_bytes(data, "little")
-        return datetime.fromtimestamp(value, timezone.utc).replace(tzinfo=None)
+        try:
+            return datetime.fromtimestamp(value, timezone.utc).replace(tzinfo=None)
+        except OverflowError as exc:
+            raise ValueError(f"Invalid timestamp {value}") from exc
 
     @classmethod
     def encode(cls, value: datetime) -> bytes:
         return int(value.replace(tzinfo=timezone.utc).timestamp()).to_bytes(
             4, "little", signed=True
         )
+
+
+@dataclass
+class CharacteristicTimeOfDay(Characteristic[time]):
+    @classmethod
+    def decode(cls, data: bytes) -> time:
+        value = int.from_bytes(data, "little")
+        minutes, seconds = divmod(value, 60)
+        hours, minutes = divmod(minutes, 60)
+        return time(hours, minutes, seconds)
+
+    @classmethod
+    def encode(cls, value: time) -> bytes:
+        return (
+            timedelta(hours=value.hour, minutes=value.minute, seconds=value.second)
+            .total_seconds()
+            .to_bytes(4, "little", signed=True)
+        )
+
+
+@dataclass
+class CharacteristicTimeDelta(Characteristic[timedelta]):
+    @classmethod
+    def decode(cls, data: bytes) -> timedelta:
+        value = int.from_bytes(data, "little")
+        return timedelta(seconds=value)
+
+    @classmethod
+    def encode(cls, value: timedelta) -> bytes:
+        return value.total_seconds().to_bytes(4, "little", signed=True)
 
 
 @dataclass
@@ -313,7 +549,7 @@ class CharacteristicIntEnum[T: IntEnum](CharacteristicInt):
 
 @dataclass
 class ErrorData[T: IntEnum]:
-    current_event_index: int
+    index: int
     total_events: int
     time_stamp: datetime
     error_code: T | int
@@ -342,7 +578,7 @@ class CharacteristicErrorData[T: IntEnum](Characteristic[ErrorData[T]]):
     @classmethod
     def encode(cls, value: ErrorData[T]) -> bytes:
         return [
-            *value.current_event_index.to_bytes(1, "little", signed=True),
+            *value.index.to_bytes(1, "little", signed=True),
             *value.total_events.to_bytes(1, "little", signed=True),
             *int(value.time_stamp.replace(tzinfo=timezone.utc).timestamp()).to_bytes(
                 4, "little", signed=True
@@ -351,16 +587,48 @@ class CharacteristicErrorData[T: IntEnum](Characteristic[ErrorData[T]]):
         ]
 
 
+@dataclass
+class CharacteristicScheduleData:
+    start_time: time
+    duration: timedelta
+    weekdays: set[Day]
+    active: bool
+    contours: set[Contour]
+
+
+@dataclass
+class CharacteristicSchedule(Characteristic[CharacteristicScheduleData]):
+    @classmethod
+    def decode(cls, data: bytes) -> CharacteristicScheduleData:
+        return CharacteristicScheduleData(
+            CharacteristicTimeOfDay.decode(data[0:4]),
+            CharacteristicTimeDelta.decode(data[4:8]),
+            CharacteristicWeekdays.decode(data[8:9]),
+            CharacteristicBool.decode(data[9:10]),
+            CharacteristicContours.decode(data[10:11]),
+        )
+
+    @classmethod
+    def encode(cls, value: CharacteristicScheduleData) -> bytes:
+        return (
+            CharacteristicTimeOfDay.encode(value.start_time)
+            + CharacteristicTimeDelta.encode(value.duration)
+            + CharacteristicWeekdays.encode(value.weekdays)
+            + CharacteristicBool.encode(value.active)
+            + CharacteristicContours.encode(value.contours)
+        )
+
+
 class Service:
     unique_id: ClassVar[str]
     uuid: ClassVar[str]
     variant: ClassVar[str | None] = None
     products: ClassVar[set[ProductType]] = set(ProductType)
-    registry: ClassVar[dict[str, list[Self]]] = {}
+    registry: ClassVar[dict[str, list[type[Self]]]] = {}
     characteristics: ClassVar[dict[str, Characteristic]] = {}
 
     @classmethod
-    def find_service(cls, uuid: str, product_type: ProductType) -> Self | None:
+    def find_service(cls, uuid: str, product_type: ProductType) -> type[Self] | None:
         services = cls.registry.get(uuid, [])
         for service in services:
             if product_type in service.products:
@@ -368,7 +636,7 @@ class Service:
         return None
 
     @classmethod
-    def services_for_product_type(cls, product_type: ProductType) -> list[Self]:
+    def services_for_product_type(cls, product_type: ProductType) -> list[type[Self]]:
         """Get all services for a product type."""
         return [
             service
@@ -393,13 +661,46 @@ class Service:
                 cls.characteristics[value.uuid] = value
 
 
-class EnumOrInt(IntEnum):
+@dataclass
+class CharacteristicEventHistoryData:
+    index: int
+    total_events: int
+    timestamp: datetime
+    schedule_index: int
+    skip_reason: SkipReason
+    duration: timedelta
+
     @classmethod
-    def enum_or_int(cls, value: int):
-        try:
-            return cls(value)
-        except ValueError:
-            return value
+    def decode(cls, data: bytes) -> Self:
+        return CharacteristicEventHistoryData(
+            CharacteristicInt.decode(data[0:1]),
+            CharacteristicInt.decode(data[1:2]),
+            CharacteristicTime.decode(data[2:6]),
+            CharacteristicInt.decode(data[6:7]),
+            SkipReason.decode(data[7:8]),
+            CharacteristicTimeDelta.decode(data[8:12]),
+        )
+
+    @classmethod
+    def encode(cls, value: Self) -> bytes:
+        return (
+            CharacteristicInt.encode(value.index)
+            + CharacteristicInt.encode(value.total_events)
+            + CharacteristicTime.encode(value.timestamp)
+            + CharacteristicInt.encode(value.schedule_index)
+            + SkipReason.encode(value.skip_reason)
+            + CharacteristicTimeDelta.encode(value.duration)
+        )
+
+
+class CharacteristicEventHistory(Characteristic[CharacteristicEventHistoryData]):
+    @classmethod
+    def decode(cls, data: bytes) -> CharacteristicEventHistoryData:
+        return CharacteristicEventHistoryData.decode(data)
+
+    @classmethod
+    def encode(cls, value: CharacteristicEventHistoryData) -> bytes:
+        return CharacteristicEventHistoryData.encode(value)
 
 
 class ProductGroup(EnumOrInt):
