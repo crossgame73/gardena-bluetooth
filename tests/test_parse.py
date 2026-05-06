@@ -1,18 +1,20 @@
 from datetime import datetime
+from enum import IntEnum
+
+import pytest
 
 from gardena_bluetooth.parse import (
+    CharacteristicErrorData,
+    CharacteristicIntEnum,
+    CharacteristicIntKeys,
+    CharacteristicNullString,
+    CharacteristicNullStringUf8,
+    CharacteristicSMPData,
+    CharacteristicString,
     ManufacturerData,
     ProductGroup,
     ProductType,
-    CharacteristicString,
-    CharacteristicNullStringUf8,
-    CharacteristicNullString,
-    CharacteristicIntEnum,
-    CharacteristicIntKeys,
-    CharacteristicErrorData,
 )
-from enum import IntEnum
-import pytest
 
 
 @pytest.mark.parametrize(
@@ -112,6 +114,25 @@ def test_string_nulled():
     assert data == "abc"
 
 
+def test_smp_data_encode_decode():
+    data = CharacteristicSMPData(
+        res=0,
+        ver=1,
+        op=2,
+        flags=0,
+        group=63,
+        sequence_num=7,
+        command_id=4,
+        payload=b"hello",
+    )
+    encoded = CharacteristicSMPData.encode(data)
+    decoded = CharacteristicSMPData.decode(encoded)
+
+    assert decoded == data
+    assert decoded.data_length == 5
+    assert decoded.payload == b"hello"
+
+
 def test_enum():
     class Values(IntEnum):
         A = 0
@@ -137,7 +158,7 @@ def test_error_code():
     data = char.decode(b"\x01\x01\xc3,\xafi\x01")
     assert data.error_code is Errors.B
     assert data.time_stamp == datetime(2026, 3, 9, 20, 25, 39)
-    assert data.current_event_index == 1
+    assert data.index == 1
     assert data.total_events == 1
 
 
@@ -147,3 +168,16 @@ def test_int_keys():
     assert raw == b"0='10',1='20'"
     data = char.decode(raw)
     assert data == {0: "10", 1: "20"}
+
+
+def test_int_enum():
+    class Values(IntEnum):
+        A = 0
+        B = 1
+        C = 2
+
+    char = CharacteristicIntEnum("", enum=Values)
+    raw = char.encode(Values.A)
+    assert raw == b"\x00"
+    data = char.decode(raw)
+    assert data is Values.A
