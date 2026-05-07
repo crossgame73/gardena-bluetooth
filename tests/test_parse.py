@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from enum import IntEnum
 
 import pytest
@@ -11,6 +11,8 @@ from gardena_bluetooth.parse import (
     CharacteristicNullStringUf8,
     CharacteristicSMPData,
     CharacteristicString,
+    CharacteristicTimeDelta,
+    CharacteristicTimeOfDay,
     ManufacturerData,
     ProductGroup,
     ProductType,
@@ -181,3 +183,32 @@ def test_int_enum():
     assert raw == b"\x00"
     data = char.decode(raw)
     assert data is Values.A
+
+
+@pytest.mark.parametrize(
+    "value",
+    [time(0, 0, 0), time(8, 0, 0), time(12, 30, 45), time(23, 59, 59)],
+)
+def test_time_of_day_round_trip(value):
+    encoded = CharacteristicTimeOfDay.encode(value)
+    assert isinstance(encoded, bytes)
+    assert len(encoded) == 4
+    assert CharacteristicTimeOfDay.decode(encoded) == value
+
+
+def test_time_of_day_seconds_since_midnight_8am():
+    # 08:00:00 = 28800 seconds, 4-byte little-endian signed
+    assert CharacteristicTimeOfDay.encode(time(8, 0, 0)) == (28800).to_bytes(
+        4, "little", signed=True
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [timedelta(0), timedelta(seconds=1), timedelta(minutes=15), timedelta(hours=4)],
+)
+def test_time_delta_round_trip(value):
+    encoded = CharacteristicTimeDelta.encode(value)
+    assert isinstance(encoded, bytes)
+    assert len(encoded) == 4
+    assert CharacteristicTimeDelta.decode(encoded) == value
