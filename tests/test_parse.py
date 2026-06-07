@@ -10,12 +10,14 @@ from gardena_bluetooth.parse import (
     CharacteristicNullString,
     CharacteristicNullStringUf8,
     CharacteristicSMPData,
+    CharacteristicStartStopWatering,
     CharacteristicString,
     CharacteristicTimeDelta,
     CharacteristicTimeOfDay,
     ManufacturerData,
     ProductGroup,
     ProductType,
+    WateringSource,
 )
 
 
@@ -212,3 +214,21 @@ def test_time_delta_round_trip(value):
     assert isinstance(encoded, bytes)
     assert len(encoded) == 4
     assert CharacteristicTimeDelta.decode(encoded) == value
+
+
+def test_watering_start():
+    char = CharacteristicStartStopWatering("")
+    value = (WateringSource.MOBILE_APP, timedelta(minutes=60))
+    raw = char.encode(value)
+    assert raw == b"0='10',1='3600'"
+    data = char.decode(raw)
+    assert data == value
+
+
+def test_watering_stop():
+    char = CharacteristicStartStopWatering("")
+    value = (WateringSource.MOBILE_APP, None)
+    raw = char.encode(value)
+    assert raw == b"0='10'"
+    data = char.decode(raw)
+    assert data == value
